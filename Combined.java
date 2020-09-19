@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.*;
@@ -106,11 +107,15 @@ public class Combined {
             Configuration conf = context.getConfiguration(); // get config
             MapWritable result = new MapWritable(); // <hash of word, tf-idf of word>
 
+            Integer length = 0; // # of words in doc text
             for (MapWritable map: values) {
                 Set<Writable> keys = map.keySet(); // getting all words that occurred in text
                 for(Writable k: keys){
                     String word = ((Text) k).toString();
                     Integer tf = ((IntWritable)(map.get(k))).get();
+
+                    length = length + tf; // updating len
+
                     Integer idf = conf.getInt(word, -1);
                     Float tfidf = (float)tf / (float)idf;
 
@@ -118,7 +123,7 @@ public class Combined {
                 }
             }
 
-            context.write(key, result); // writing the result
+            context.write(new Text(key.toString() + " length: " + length.toString()), result); // writing the result
         }
     }
 
@@ -147,29 +152,40 @@ public class Combined {
         conf = new Configuration();
 
         // reading IDF from file
-        path = new Path("output_idf/part-r-00000");
+
         FileSystem fs = FileSystem.get(conf);
         BufferedReader reader;
         try {
-            FSDataInputStream is = fs.open(path);
-//            Path p = new Path("/user/vagrant/output_idf/part-r-00000");
-            reader = new BufferedReader(new InputStreamReader(fs.open(path)));
             
-            String line = reader.readLine();
-            while(line != null){
-                StringTokenizer itr = new StringTokenizer(line);
-                String cur_word = "";
-                Integer cur_idf = 0;
-                // iterating through line
-                if(itr.hasMoreTokens()){
-                    cur_word = itr.nextToken();
-                    if (itr.hasMoreTokens()) {
-                        cur_idf = Integer.parseInt(itr.nextToken().replaceAll("[^0-9]", ""));
-                        conf.setInt(cur_word, cur_idf); //passing <word, idf> to mapreduce
+            // listing filenames in the dir
+            FileStatus[] fileStatuses = fs.listStatus(new Path("output_idf"));
+            
+            // going through each file
+            for(FileStatus status: fileStatuses) {
+                String filename = status.getPath().toString();
+                if (!filename.contains("SUCCESS")) {
+                    // reading files
+                    path = new Path("output_idf/" + filename.substring(filename.indexOf("output_idf/") + "output_idf/".length()));
+
+                    reader = new BufferedReader(new InputStreamReader(fs.open(path)));
+
+                    String line = reader.readLine();
+                    while(line != null){
+                        StringTokenizer itr = new StringTokenizer(line);
+                        String cur_word = "";
+                        Integer cur_idf = 0;
+                        // iterating through line
+                        if(itr.hasMoreTokens()){
+                            cur_word = itr.nextToken();
+                            if (itr.hasMoreTokens()) {
+                                cur_idf = Integer.parseInt(itr.nextToken().replaceAll("[^0-9]", ""));
+                                conf.setInt(cur_word, cur_idf); //passing <word, idf> to mapreduce
+                            }
+                        }
+
+                        line = reader.readLine(); // reading the next line
                     }
                 }
-
-                line = reader.readLine(); // reading the next line
             }
         } catch (IOException e){
             e.printStackTrace();
