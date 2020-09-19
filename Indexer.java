@@ -27,16 +27,16 @@ public class Indexer {
 
         public void map(Object key, Text value, Context context
         ) throws IOException, InterruptedException {
-            
+
             String line = value.toString(); // acquiring the doc
             String text = line.substring(line.indexOf(", \"text\":") + 9); // getting doc text
-            String id = line.substring(line.indexOf(8, line.indexOf("\", \"url\""))); // getting doc id
+            String id = line.substring(8, line.indexOf("\", \"url\"")); // getting doc id
 
             StringTokenizer itr = new StringTokenizer(text.toLowerCase()); // iterating through text
             String cur = ""; // current word in text
             
             MapWritable map = new MapWritable(); // <word, # of its occurences in the text>
-            
+
             // iterating through text
             while (itr.hasMoreTokens()) {
                 cur = itr.nextToken().replaceAll("[^a-z\\-]", ""); //cur word
@@ -118,7 +118,7 @@ public class Indexer {
         job.setMapperClass(IndMapper.class);
         job.setReducerClass(IndReducer.class);
         job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(IntWritable.class);
+        job.setOutputValueClass(MapWritable.class);
 
         // Files
         FileInputFormat.setInputDirRecursive(job, true);
