@@ -5,10 +5,7 @@ import java.util.StringTokenizer;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.io.*;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -156,10 +153,10 @@ public class Combined {
         FileSystem fs = FileSystem.get(conf);
         BufferedReader reader;
         try {
-            
+
             // listing filenames in the dir
             FileStatus[] fileStatuses = fs.listStatus(new Path("output_idf"));
-            
+
             // going through each file
             for(FileStatus status: fileStatuses) {
                 String filename = status.getPath().toString();
@@ -207,8 +204,51 @@ public class Combined {
         FileOutputFormat.setOutputPath(job2, new Path(args[1]));
 
         // Starting the job
-        System.exit(job2.waitForCompletion(true) ? 0 : 1);
+        job2.waitForCompletion(true);
 
         ///////////// Word2Vec & TF-IDF /////////////
+
+        ///////////// AVG DOCs LEN /////////////
+        int n_docs = 0; // # of documents
+        int sum = 0; // sum of lens of all docs
+        float avg = 0; // avg len of docs
+        try {
+
+            // listing filenames in the dir
+            FileStatus[] fileStatuses = fs.listStatus(new Path(args[1]));
+
+            // going through each file
+            for(FileStatus status: fileStatuses) {
+                String filename = status.getPath().toString();
+                if (!filename.contains("SUCCESS")) {
+                    // reading files
+                    path = new Path(args[1] + "/" + filename.substring(filename.indexOf(args[1]) + args[1].length() + 1));
+
+                    reader = new BufferedReader(new InputStreamReader(fs.open(path)));
+
+                    String line = reader.readLine();
+                    while(line != null){
+                        if(line.length() > 0) {
+                            n_docs ++; // incrementing # of docs
+                            // getting len of the doc
+                            sum += Integer.parseInt(line.substring(line.indexOf("length: ") + "length: ".length(), line.indexOf("{")).replaceAll("[^0-9]", ""));
+                        }
+                        line = reader.readLine(); // reading the next line
+                    }
+                }
+            }
+            // calculating the avg len
+            avg = (float) sum / (float) n_docs;
+
+            FSDataOutputStream out = fs.create(new Path(args[1] + "/avg_len"));
+            out.writeChars(Float.toString(avg));
+
+        } catch (IOException e){
+            e.printStackTrace();
+        }
+        ///////////// AVG DOCs LEN  /////////////
+
+        System.exit(1);
+
     }
 }
