@@ -1,10 +1,7 @@
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.StringTokenizer;
+import java.util.*;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -16,6 +13,7 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.jute.Index;
 
 public class Relan {
 
@@ -77,6 +75,45 @@ public class Relan {
                 context.write(key, v);
             }
         }
+    }
+
+    public static HashMap<Integer, String> getTitle(Set<Integer> ids, FileSystem fs) {
+        HashMap<Integer, String> result = new HashMap<Integer, String>();
+        HashSet<Integer> used = new HashSet<Integer>();
+        BufferedReader reader;
+        Path path;
+        try {
+
+            // listing filenames in the dir
+            FileStatus[] fileStatuses = fs.listStatus(new Path("/EnWikiSmall"));
+
+            // going through each file
+            for(FileStatus status: fileStatuses) {
+                String filename = status.getPath().toString();
+
+                // reading files
+                path = new Path("/EnWikiSmall/" + filename.substring(filename.indexOf("/EnWikiSmall/") + "/EnWikiSmall/".length()));
+
+                reader = new BufferedReader(new InputStreamReader(fs.open(path)));
+
+                String line = reader.readLine();
+                while(line != null && used.size() != ids.size()){
+                    Integer cur_id = Integer.parseInt(line.substring(8, line.indexOf("\", \"url\"")).replaceAll(" ", "")); // getting doc id
+                    if(ids.contains(cur_id)) {
+                        String title = line.substring(line.indexOf("title") + "title".length() + 4, line.indexOf("\", \"text"));
+                        String url = line.substring(line.indexOf("url") + "url".length() + 4, line.indexOf("\", \"title"));
+
+                        result.put(cur_id, "Title: " + title + "    URL: " + url);
+                        used.add(cur_id);
+                    }
+                    line = reader.readLine(); // reading the next line
+                }
+
+            }
+        } catch (IOException e){
+            e.printStackTrace();
+        }
+        return result;
     }
 
     public static void main(String[] args) throws Exception {
@@ -158,8 +195,6 @@ public class Relan {
         ///////////// QUERY TO TF-IDF /////////////
 
 
-        conf.set("!!n!!", args[1]); // passing needed # of relevant results
-
         Job job = Job.getInstance(conf, "relan");
         job.setJarByClass(Relan.class);
         job.setMapperClass(RelanMapper.class);
@@ -171,8 +206,64 @@ public class Relan {
         FileInputFormat.setInputDirRecursive(job, true);
         FileInputFormat.addInputPath(job, new Path(args[2]));
         FileOutputFormat.setOutputPath(job, new Path(args[3]));
-        System.exit(job.waitForCompletion(true) ? 0 : 1);
+        job.waitForCompletion(true);
 
+        Integer count = 0;
+        Float cur_score = (float) 0;
+        Integer cur_id = 0;
+        HashMap<Integer, Float> top = new HashMap<Integer, Float>();
+        ArrayList<Integer> arr = new ArrayList<Integer>();
+
+        try {
+
+            // listing filenames in the dir
+            FileStatus[] fileStatuses = fs.listStatus(new Path(args[3]));
+
+            // going through each file
+            for(FileStatus status: fileStatuses) {
+                if (count >= Integer.parseInt(args[1])){
+                    break;
+                }
+
+                String filename = status.getPath().toString();
+                if (!filename.contains("SUCCESS")) {
+                    // reading files
+                    path = new Path(args[3] + "/" + filename.substring(filename.indexOf(args[3]) + args[3].length() + 1));
+
+                    reader = new BufferedReader(new InputStreamReader(fs.open(path)));
+
+                    String line = reader.readLine();
+                    while(line != null && count < Integer.parseInt(args[1])){
+                        itr = new StringTokenizer(line);
+                        // iterating through line
+                        if(itr.hasMoreTokens()){
+                            cur_score = Float.parseFloat(itr.nextToken());
+//                            System.out.println(cur_score);
+                            if (itr.hasMoreTokens()) {
+                                cur_id = Integer.parseInt(itr.nextToken().replaceAll("[^0-9]", ""));
+                                top.put(new Integer(cur_id), new Float(cur_score));
+//                                System.out.println(top.get(cur_id));
+                                arr.add(cur_id);
+                            }
+                        }
+
+                        count++;
+                        line = reader.readLine(); // reading the next line
+                    }
+                }
+            }
+        } catch (IOException e){
+            e.printStackTrace();
+        }
+
+        HashMap<Integer, String> title = getTitle(top.keySet(), fs);
+
+        for(Integer i: arr){
+//            System.out.println(top.keySet());
+            System.out.println("Id: " + i.toString() + "    " + title.get(i) + "   Score: " + top.get(i).toString());
+        }
+
+        System.exit(1);
 
     }
 }
