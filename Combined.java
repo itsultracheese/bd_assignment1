@@ -26,16 +26,18 @@ public class Combined {
 
             String line = new String(value.toString());
             String text = line.substring(line.indexOf(", \"text\":") + 9);
-            StringTokenizer itr = new StringTokenizer(text.toLowerCase());
+            StringTokenizer itr = new StringTokenizer(text.toLowerCase().replaceAll("\\\\[a-z]", " ").replaceAll("-", " "));
             String cur = "";
             HashSet used = new HashSet();
 
             while (itr.hasMoreTokens()) {
-                cur = itr.nextToken().replaceAll("[^a-z\\-]", "");
-                if(!used.contains(cur)){
-                    used.add(cur);
-                    word.set(cur);
-                    context.write(word, one);
+                cur = itr.nextToken().replaceAll("[\\\\0-9~`!@#$%^&*()\\-_+=\\,.<>?/'\":;{}\\[\\]\\|]", "");
+                if (! cur.equals("")) {
+                    if (!used.contains(cur)) {
+                        used.add(cur);
+                        word.set(cur);
+                        context.write(word, one);
+                    }
                 }
             }
         }
@@ -52,6 +54,7 @@ public class Combined {
             for (IntWritable val : values) {
                 sum += val.get();
             }
+
             result.set(sum);
             context.write(key, result);
         }
@@ -70,14 +73,15 @@ public class Combined {
             String text = line.substring(line.indexOf(", \"text\":") + 9); // getting doc text
             String id = line.substring(8, line.indexOf("\", \"url\"")); // getting doc id
 
-            StringTokenizer itr = new StringTokenizer(text.toLowerCase()); // iterating through text
+            StringTokenizer itr = new StringTokenizer(text.toLowerCase().replaceAll("\\\\[a-z]", " ").replaceAll("-", " ")); // iterating through text
             String cur = ""; // current word in text
-
+            text = null;
+            line = null;
             MapWritable map = new MapWritable(); // <word, # of its occurences in the text>
 
             // iterating through text
             while (itr.hasMoreTokens()) {
-                cur = itr.nextToken().replaceAll("[^a-z\\-]", ""); //cur word
+                cur = itr.nextToken().replaceAll("[\\\\0-9~`!@#$%^&*()\\-_+=\\,.<>?/'\":;{}\\[\\]\\|]", ""); //cur word
                 if (! cur.equals("")) {
                     word = new Text(cur);
                     if (! map.containsKey(word)) {
@@ -148,7 +152,7 @@ public class Combined {
         // setting configs
         conf = new Configuration();
 
-        // reading IDF from file
+        ///////////// reading IDF from file /////////////
 
         FileSystem fs = FileSystem.get(conf);
         BufferedReader reader;
@@ -184,9 +188,16 @@ public class Combined {
                     }
                 }
             }
+
+            fileStatuses = null;
+
         } catch (IOException e){
             e.printStackTrace();
         }
+
+        ///////////// reading IDF from file /////////////
+
+        job = null;
 
         // initializing job
         Job job2 = Job.getInstance(conf, "Indexer");
