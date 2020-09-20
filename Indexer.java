@@ -265,10 +265,55 @@ public class Indexer {
     }
 
 
+    public static void args_usage() {
+        System.out.println("Arguments usage:");
+        System.out.println("hadoop jar Indexer.java Indexer arg0 arg1");
+        System.out.println("arg0 - path to folder with wiki dump");
+        System.out.println("arg1 - path to output folder (should not exist before execution");
+        System.out.println("---------------------------------");
+        System.out.println("Example: hadoop jar Indexer.java Indexer /EnWikiSmall IndexerOutput");
+    }
+
+
     public static void main(String[] args) throws Exception {
 
-        ///////////// IDF /////////////
         Configuration conf = new Configuration();
+
+        // CHECKING ARGUMENTS CORRECTNESS
+        if (args.length != 2) {
+            System.out.println("The number of arguments provided is incorrect");
+            System.out.println("---------------------------------");
+            args_usage();
+            System.exit(1);
+        }
+
+        if (args[1].equals("output_idf")) {
+            System.out.println("Invalid folder name. You can call your output folder by any other name");
+            System.out.println("---------------------------------");
+            args_usage();
+            System.exit(1);
+        }
+
+        FileSystem fs = FileSystem.get(conf);
+        Path p1 = new Path(args[0]);
+        Path p2 = new Path(args[1]);
+
+        if (!fs.exists(p1)) {
+            System.out.println("The input directory doesn't exist");
+            System.out.println("---------------------------------");
+            args_usage();
+            System.exit(1);
+        }
+
+        if (fs.exists(p2)) {
+            System.out.println("The output folder has to be the one that does not exist yet");
+            System.out.println("---------------------------------");
+            args_usage();
+            System.exit(1);
+        }
+        
+        
+        ///////////// IDF /////////////
         Job job = Job.getInstance(conf, "tf-idf");
         job.setJarByClass(Indexer.class);
         job.setMapperClass(IDFMapper.class);
@@ -305,8 +350,6 @@ public class Indexer {
         conf = new Configuration();
 
         ///////////// reading IDF from file /////////////
-
-        FileSystem fs = FileSystem.get(conf);
         BufferedReader reader;
         int count = 0;
         int threshold = 200000;
