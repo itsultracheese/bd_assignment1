@@ -1,4 +1,5 @@
 import java.io.*;
+import java.net.URI;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
@@ -164,56 +165,41 @@ public class Indexer {
     public static class IndReducer
             extends Reducer<Text, MapWritable, Text, MapWritable> {
 
-        public void reduce(Text key, Iterable<MapWritable> values,
-                           Context context
-        ) throws IOException, InterruptedException {
+        private static HashMap<String, Integer> get_idf = new HashMap<String, Integer>();
 
+        @Override
+        protected void setup(Context context) throws IOException, InterruptedException {
             Configuration conf = context.getConfiguration(); // get config
-            HashMap<String, Integer> get_idf = new HashMap<String, Integer>();
+            URI[] cacheFiles = context.getCacheFiles();
 
-            FileSystem fs = FileSystem.get(conf);
-            BufferedReader reader;
-            Path path;
-            try {
+            for (URI cf: cacheFiles){
+                FileSystem fs = FileSystem.get(conf);
+                Path path = new Path(cf.toString());
+                BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(path)));
 
-                // listing filenames in the dir
-                FileStatus[] fileStatuses = fs.listStatus(new Path("output_idf"));
-
-                // going through each file
-                for(FileStatus status: fileStatuses) {
-                    String filename = status.getPath().toString();
-                    if (!filename.contains("SUCCESS")) { //we are not interested in _SUCCESS file
-                        // reading files
-                        path = new Path("output_idf/" +
-                                filename.substring(filename.indexOf("output_idf/") + "output_idf/".length()));
-
-                        reader = new BufferedReader(new InputStreamReader(fs.open(path)));
-
-                        String line = reader.readLine(); // reading the 1st line of the file
-                        while(line != null){
-                            StringTokenizer itr = new StringTokenizer(line);
-                            String cur_word;
-                            Integer cur_idf;
-                            // iterating through line
-                            if(itr.hasMoreTokens()){
-                                cur_word = itr.nextToken();
-                                if (itr.hasMoreTokens()) {
-                                    cur_idf = Integer.parseInt(itr.nextToken().replaceAll("[^0-9]", ""));
-                                    get_idf.put(cur_word, cur_idf);
-                                }
-                            }
-
-                            line = reader.readLine(); // reading the next line
+                String line = reader.readLine(); // reading the 1st line of the file
+                while(line != null){
+                    StringTokenizer itr = new StringTokenizer(line);
+                    String cur_word;
+                    Integer cur_idf;
+                    // iterating through line
+                    if(itr.hasMoreTokens()){
+                        cur_word = itr.nextToken();
+                        if (itr.hasMoreTokens()) {
+                            cur_idf = Integer.parseInt(itr.nextToken().replaceAll("[^0-9]", ""));
+                            get_idf.put(cur_word, cur_idf);
                         }
                     }
 
+                    line = reader.readLine(); // reading the next line
                 }
 
-
-            } catch (IOException e){
-                e.printStackTrace();
             }
+        }
 
+        public void reduce(Text key, Iterable<MapWritable> values,
+                           Context context
+        ) throws IOException, InterruptedException {
 
             MapWritable result = new MapWritable(); // <hash of word, tf-idf of word>
 
@@ -326,12 +312,40 @@ public class Indexer {
         // initializing job
         Job job2 = Job.getInstance(conf, "indexer");
 
+        fs = FileSystem.get(conf);
+        try {
+
+            // listing filenames in the dir
+            FileStatus[] fileStatuses = fs.listStatus(new Path("output_idf"));
+
+            // going through each file
+            for(FileStatus status: fileStatuses) {
+                String filename = status.getPath().toString();
+                if (!filename.contains("SUCCESS")) { //we are not interested in _SUCCESS file
+                    // reading files
+                    path = new Path("output_idf/" +
+                            filename.substring(filename.indexOf("output_idf/") + "output_idf/".length()));
+
+                    job2.addCacheFile(path.toUri());
+                    System.out.println(path.toUri());
+                }
+
+            }
+
+
+        } catch (IOException e){
+            e.printStackTrace();
+        }
+
+
         // setting corresponding classes
         job2.setJarByClass(Indexer.class);
         job2.setMapperClass(IndMapper.class);
         job2.setReducerClass(IndReducer.class);
         job2.setOutputKeyClass(Text.class);
         job2.setOutputValueClass(MapWritable.class);
+
+
 
         // Files
         FileInputFormat.setInputDirRecursive(job2, true);
@@ -390,8 +404,4 @@ public class Indexer {
 
     }
 }
-
-//javac -cp $(hadoop classpath) Combined.java
-//        78  jar -cvf Combined.jar Combined*.class
-//   79  hadoop jar Combined.jar Combined /EnWikiSmall outComb
 
