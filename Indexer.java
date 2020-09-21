@@ -1,4 +1,5 @@
 import java.io.*;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.StringTokenizer;
@@ -72,13 +73,9 @@ public class Indexer {
     public static class SORTIDFMapper
             extends Mapper<Object, Text, IntWritable, Text>{
 
-        private final static IntWritable one = new IntWritable(1);
-        private Text word = new Text();
-
         public void map(Object key, Text value, Context context
         ) throws IOException, InterruptedException {
 
-            String line = value.toString(); // reading a ling containing json about doc
             StringTokenizer itr = new StringTokenizer(value.toString());
             String word;
             int idf;
@@ -160,7 +157,6 @@ public class Indexer {
                 }
             }
 
-            System.gc();
             context.write(new Text(id), map); // passing to reducer
         }
     }
@@ -173,6 +169,52 @@ public class Indexer {
         ) throws IOException, InterruptedException {
 
             Configuration conf = context.getConfiguration(); // get config
+            HashMap<String, Integer> get_idf = new HashMap<String, Integer>();
+
+            FileSystem fs = FileSystem.get(conf);
+            BufferedReader reader;
+            Path path;
+            try {
+
+                // listing filenames in the dir
+                FileStatus[] fileStatuses = fs.listStatus(new Path("output_idf"));
+
+                // going through each file
+                for(FileStatus status: fileStatuses) {
+                    String filename = status.getPath().toString();
+                    if (!filename.contains("SUCCESS")) { //we are not interested in _SUCCESS file
+                        // reading files
+                        path = new Path("output_idf/" +
+                                filename.substring(filename.indexOf("output_idf/") + "output_idf/".length()));
+
+                        reader = new BufferedReader(new InputStreamReader(fs.open(path)));
+
+                        String line = reader.readLine(); // reading the 1st line of the file
+                        while(line != null){
+                            StringTokenizer itr = new StringTokenizer(line);
+                            String cur_word;
+                            Integer cur_idf;
+                            // iterating through line
+                            if(itr.hasMoreTokens()){
+                                cur_word = itr.nextToken();
+                                if (itr.hasMoreTokens()) {
+                                    cur_idf = Integer.parseInt(itr.nextToken().replaceAll("[^0-9]", ""));
+                                    get_idf.put(cur_word, cur_idf);
+                                }
+                            }
+
+                            line = reader.readLine(); // reading the next line
+                        }
+                    }
+
+                }
+
+
+            } catch (IOException e){
+                e.printStackTrace();
+            }
+
+
             MapWritable result = new MapWritable(); // <hash of word, tf-idf of word>
 
             Integer length = 0; // # of words in doc text
@@ -184,86 +226,20 @@ public class Indexer {
 
                     length = length + tf; // updating the length of the doc
 
-                    Integer idf = conf.getInt(word, -1);
 
-                    if (idf != -1) { //making sure that word occurred at least in 1 doc
+                    Integer idf = get_idf.get(word);
+
+                    if (idf != null) { //making sure that word occurred at least in 1 doc
                         Float tfidf = (float)tf / (float)idf;
                         result.put(new IntWritable(word.hashCode()), new FloatWritable(tfidf));
                     }
 
-                    else {
-                        idf = get_idf(conf, word);
-
-                        if (idf != -1) { //making sure that word occurred at least in 1 doc
-                            Float tfidf = (float)tf / (float)idf;
-                            result.put(new IntWritable(word.hashCode()), new FloatWritable(tfidf));
-                        }
-                    }
-
                 }
             }
-            System.gc();
+
             context.write(new Text(key.toString() + " length: " + length.toString()), result); // writing the result
         }
     }
-
-    public static Integer get_idf(Configuration conf, String word) {
-        try {
-            FileSystem fs = FileSystem.get(conf);
-            BufferedReader reader;
-            int count = 0;
-            int threshold = 200000;
-
-            // listing filenames in the dir
-            FileStatus[] fileStatuses = fs.listStatus(new Path("output_idf"));
-
-            // going through each file
-            for(FileStatus status: fileStatuses) {
-                String filename = status.getPath().toString();
-                if (!filename.contains("SUCCESS")) { //we are not interested in _SUCCESS file
-                    // reading files
-                    Path path = new Path("output_idf/" +
-                            filename.substring(filename.indexOf("output_idf/") + "output_idf/".length()));
-
-                    reader = new BufferedReader(new InputStreamReader(fs.open(path)));
-
-                    String line = reader.readLine(); // reading the 1st line of the file
-
-                    while (line != null && count < threshold){
-                        line = reader.readLine();
-                        count ++;
-                    }
-
-                    while(line != null){
-                        StringTokenizer itr = new StringTokenizer(line);
-                        String cur_word;
-                        Integer cur_idf;
-                        // iterating through line
-                        if(itr.hasMoreTokens()){
-                            cur_word = itr.nextToken();
-                            if (cur_word.equals(word)) {
-                                if (itr.hasMoreTokens()) {
-                                    cur_idf = Integer.parseInt(itr.nextToken().replaceAll("[^0-9]", ""));
-                                    return cur_idf;
-                                }
-                            }
-                        }
-
-                        line = reader.readLine(); // reading the next line
-                    }
-
-                }
-
-            }
-
-
-        } catch (IOException e){
-            e.printStackTrace();
-        }
-
-        return -1;
-    }
-
 
     public static void args_usage() {
         System.out.println("Arguments usage:");
@@ -273,7 +249,6 @@ public class Indexer {
         System.out.println("---------------------------------");
         System.out.println("Example: hadoop jar Indexer.java Indexer /EnWikiSmall IndexerOutput");
     }
-
 
     public static void main(String[] args) throws Exception {
 
@@ -311,8 +286,7 @@ public class Indexer {
             args_usage();
             System.exit(1);
         }
-        
-        
+
         ///////////// IDF /////////////
         Job job = Job.getInstance(conf, "tf-idf");
         job.setJarByClass(Indexer.class);
@@ -349,60 +323,6 @@ public class Indexer {
         // setting configs
         conf = new Configuration();
 
-        ///////////// reading IDF from file /////////////
-        BufferedReader reader;
-        int count = 0;
-        int threshold = 200000;
-        try {
-
-            // listing filenames in the dir
-            FileStatus[] fileStatuses = fs.listStatus(new Path("output_idf"));
-
-            // going through each file
-            for(FileStatus status: fileStatuses) {
-                String filename = status.getPath().toString();
-                if (!filename.contains("SUCCESS")) { //we are not interested in _SUCCESS file
-                    // reading files
-                    path = new Path("output_idf/" +
-                            filename.substring(filename.indexOf("output_idf/") + "output_idf/".length()));
-
-                    reader = new BufferedReader(new InputStreamReader(fs.open(path)));
-
-                    String line = reader.readLine(); // reading the 1st line of the file
-                    while(line != null && count < threshold){
-                        StringTokenizer itr = new StringTokenizer(line);
-                        String cur_word;
-                        Integer cur_idf;
-                        // iterating through line
-                        if(itr.hasMoreTokens()){
-                            cur_word = itr.nextToken();
-                            if (itr.hasMoreTokens()) {
-                                cur_idf = Integer.parseInt(itr.nextToken().replaceAll("[^0-9]", ""));
-                                count++;
-                                conf.setInt(cur_word, cur_idf); //passing <word, idf> to mapreduce
-                            }
-                        }
-
-                        line = reader.readLine(); // reading the next line
-                    }
-
-                    if (count >= threshold){
-                        break;
-                    }
-                }
-
-            }
-
-
-        } catch (IOException e){
-            e.printStackTrace();
-        }
-
-        ///////////// reading IDF from file /////////////
-
-        job = null; // saving mem
-        System.gc();
-
         // initializing job
         Job job2 = Job.getInstance(conf, "indexer");
 
@@ -423,10 +343,13 @@ public class Indexer {
 
         ///////////// Word2Vec & TF-IDF /////////////
 
+
+
         ///////////// AVG DOCs LEN /////////////
         int n_docs = 0; // # of documents
         int sum = 0; // sum of lens of all docs
         float avg = 0; // avg len of docs
+        BufferedReader reader;
         try {
 
             // listing filenames in the dir
