@@ -185,6 +185,7 @@ public class Query {
         ///////////// reading IDF from file /////////////
         BufferedReader reader;
         Path path;
+        HashMap<String, Integer> idfs = new HashMap<String, Integer>();
         try {
 
             // listing filenames in the dir
@@ -209,7 +210,7 @@ public class Query {
                             cur_word = itr.nextToken();
                             if (itr.hasMoreTokens()) {
                                 cur_idf = Integer.parseInt(itr.nextToken().replaceAll("[^0-9]", ""));
-                                conf.setInt(cur_word, cur_idf); //passing <word, idf> to mapreduce
+                                idfs.put(cur_word, cur_idf); //saving <word, idf> for later usage
                             }
                         }
 
@@ -249,10 +250,9 @@ public class Query {
         Set<String> keySet = queryMap.keySet();
         for (String k: keySet) {
             // obtaining idf for word
-            cur_idf = Integer.parseInt(conf.get(k, "0"));
-
-            if (cur_idf != 0) {
-                // divide tf by idf
+            cur_idf = idfs.get(k);
+            // divide tf by idf
+            if (cur_idf != null) {
                 r = (float) queryMap.get(k) / (float) cur_idf;
 
                 // write query tf/idf for word for mapreduce
