@@ -250,11 +250,14 @@ public class Query {
         for (String k: keySet) {
             // obtaining idf for word
             cur_idf = Integer.parseInt(conf.get(k, "0"));
-            // divide tf by idf
-            r = (float) queryMap.get(k) / (float) cur_idf;
 
-            // write query tf/idf for word for mapreduce
-            conf.set("!!query!!" + String.valueOf(k.hashCode()), Float.toString(r));
+            if (cur_idf != 0) {
+                // divide tf by idf
+                r = (float) queryMap.get(k) / (float) cur_idf;
+
+                // write query tf/idf for word for mapreduce
+                conf.set("!!query!!" + String.valueOf(k.hashCode()), Float.toString(r));
+            }
         }
         ///////////// QUERY TO TF-IDF /////////////
 
