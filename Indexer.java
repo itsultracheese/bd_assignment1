@@ -170,6 +170,9 @@ public class Indexer {
         @Override
         protected void setup(Context context) throws IOException, InterruptedException {
             Configuration conf = context.getConfiguration(); // get config
+            
+            // reading files from distributed cache
+            
             URI[] cacheFiles = context.getCacheFiles();
 
             for (URI cf: cacheFiles){
@@ -311,7 +314,8 @@ public class Indexer {
 
         // initializing job
         Job job2 = Job.getInstance(conf, "indexer");
-
+    
+        // adding files to distributed cache
         fs = FileSystem.get(conf);
         try {
 
@@ -325,9 +329,7 @@ public class Indexer {
                     // reading files
                     path = new Path("output_idf/" +
                             filename.substring(filename.indexOf("output_idf/") + "output_idf/".length()));
-
                     job2.addCacheFile(path.toUri());
-                    System.out.println(path.toUri());
                 }
 
             }
