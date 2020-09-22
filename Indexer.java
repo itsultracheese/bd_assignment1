@@ -71,53 +71,6 @@ public class Indexer {
         }
     }
 
-    public static class SORTIDFMapper
-            extends Mapper<Object, Text, IntWritable, Text>{
-
-        public void map(Object key, Text value, Context context
-        ) throws IOException, InterruptedException {
-
-            StringTokenizer itr = new StringTokenizer(value.toString());
-            String word;
-            int idf;
-
-            if (itr.hasMoreTokens()){
-                word = itr.nextToken();
-                if (itr.hasMoreTokens()) {
-                    idf = Integer.parseInt(itr.nextToken().replaceAll("[^0-9]", ""));
-                    context.write(new IntWritable(idf), new Text(word));
-                }
-            }
-        }
-    }
-
-    public static class SORTIDFComparator
-            extends WritableComparator {
-
-        protected SORTIDFComparator() {
-            super(IntWritable.class, true);
-        }
-
-        @Override
-        public int compare(WritableComparable a, WritableComparable b) {
-            IntWritable f1 = (IntWritable) a;
-            IntWritable f2 = (IntWritable) b;
-            return f2.compareTo(f1);
-        }
-    }
-
-    public static class SORTIDFReducer
-            extends Reducer<IntWritable,Text,Text,IntWritable> {
-
-        public void reduce(IntWritable key, Iterable<Text> values,
-                           Context context
-        ) throws IOException, InterruptedException {
-            for(Text val: values) {
-                context.write(val, key);
-            }
-        }
-    }
-
     public static class IndMapper
             extends Mapper<Object, Text, Text, MapWritable>{
 
@@ -170,9 +123,9 @@ public class Indexer {
         @Override
         protected void setup(Context context) throws IOException, InterruptedException {
             Configuration conf = context.getConfiguration(); // get config
-            
+
             // reading files from distributed cache
-            
+
             URI[] cacheFiles = context.getCacheFiles();
 
             for (URI cf: cacheFiles){
@@ -286,26 +239,10 @@ public class Indexer {
         job.setOutputValueClass(IntWritable.class);
         FileInputFormat.setInputDirRecursive(job, true);
         FileInputFormat.addInputPath(job, new Path(args[0]));
-        Path path = new Path("output_idf_tmp");
+        Path path = new Path("output_idf");
         FileOutputFormat.setOutputPath(job, path);
         job.waitForCompletion(true);
         ///////////// IDF /////////////
-
-        ///////////// SORT IDF /////////////
-        conf = new Configuration();
-        Job job1 = Job.getInstance(conf, "sort");
-        job1.setJarByClass(Indexer.class);
-        job1.setMapperClass(SORTIDFMapper.class);
-        job1.setSortComparatorClass(SORTIDFComparator.class);
-        job1.setReducerClass(SORTIDFReducer.class);
-        job1.setOutputKeyClass(IntWritable.class);
-        job1.setOutputValueClass(Text.class);
-        FileInputFormat.setInputDirRecursive(job1, true);
-        FileInputFormat.addInputPath(job1, path);
-        path = new Path("output_idf");
-        FileOutputFormat.setOutputPath(job1, path);
-        job1.waitForCompletion(true);
-        ///////////// SORT IDF /////////////
 
 
         ///////////// Word2Vec & TF-IDF /////////////
@@ -314,7 +251,7 @@ public class Indexer {
 
         // initializing job
         Job job2 = Job.getInstance(conf, "indexer");
-    
+
         // adding files to distributed cache
         fs = FileSystem.get(conf);
         try {
@@ -357,53 +294,7 @@ public class Indexer {
         // Starting the job
         job2.waitForCompletion(true);
 
-        ///////////// Word2Vec & TF-IDF /////////////
-
-
-
-        ///////////// AVG DOCs LEN /////////////
-        int n_docs = 0; // # of documents
-        int sum = 0; // sum of lens of all docs
-        float avg = 0; // avg len of docs
-        BufferedReader reader;
-        try {
-
-            // listing filenames in the dir
-            FileStatus[] fileStatuses = fs.listStatus(new Path(args[1]));
-
-            // going through each file
-            for(FileStatus status: fileStatuses) {
-                String filename = status.getPath().toString();
-                if (!filename.contains("SUCCESS")) {
-                    // reading files
-                    path = new Path(args[1] + "/" + filename.substring(filename.indexOf(args[1]) + args[1].length() + 1));
-
-                    reader = new BufferedReader(new InputStreamReader(fs.open(path)));
-
-                    String line = reader.readLine();
-                    while(line != null){
-                        if(line.length() > 0) {
-                            n_docs ++; // incrementing # of docs
-                            // getting len of the doc
-                            sum += Integer.parseInt(line.substring(line.indexOf("length: ") + "length: ".length(), line.indexOf("{")).replaceAll("[^0-9]", ""));
-                        }
-                        line = reader.readLine(); // reading the next line
-                    }
-                }
-            }
-            // calculating the avg len
-            avg = (float) sum / (float) n_docs;
-
-            FSDataOutputStream out = fs.create(new Path(args[1] + "/avg_len"));
-            out.writeChars(Float.toString(avg));
-
-        } catch (IOException e){
-            e.printStackTrace();
-        }
-        ///////////// AVG DOCs LEN  /////////////
-
         System.exit(1);
 
     }
 }
-
