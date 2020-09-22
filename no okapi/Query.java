@@ -126,13 +126,13 @@ public class Query {
     public static void args_usage() {
         // example of proper usage
         System.out.println("Arguments usage:");
-        System.out.println("hadoop jar Query.java Query arg0 arg1 arg2 arg3");
+        System.out.println("hadoop jar Query.jar Query arg0 arg1 arg2 arg3");
         System.out.println("arg0 - query text in quotes");
         System.out.println("arg1 - number of relevant results to obtain, from 0 to 1000");
         System.out.println("arg2 - path to indexer step output");
         System.out.println("arg3 - path to output folder (should not exist before execution");
         System.out.println("---------------------------------");
-        System.out.println("Example: hadoop jar Query.java Query \"penguin\" 10 IndexerOutput QueryOutput");
+        System.out.println("Example: hadoop jar Query.jar Query \"penguin\" 10 IndexerOutput QueryOutput");
     }
 
     public static void main(String[] args) throws Exception {
