@@ -42,10 +42,13 @@ public class Query {
                 tfidf_t = null;
                 // iterating through all words present in doc
                 for (String t : tfidfs) {
-                    cur_word = t.substring(0, t.indexOf("=")).replaceAll(" ", "");  // obtaining word
-                    cur_val = t.substring(t.indexOf("=") + 1).replaceAll(" ", "");  // obtaining  word tf/idf score for doc
-                    // calculate relevance score
-                    r += Float.parseFloat(conf.get("!!query!!" + cur_word, "0")) * Float.valueOf(cur_val);
+                    if (t.contains("=")) {
+                        cur_word = t.substring(0, t.indexOf("=")).replaceAll(" ", "");  // obtaining word
+                        cur_val = t.substring(t.indexOf("=") + 1).replaceAll(" ", "");  // obtaining  word tf/idf score for doc
+                        // calculate relevance score
+                        r += Float.parseFloat(conf.get("!!query!!" + cur_word, "0")) * Float.valueOf(cur_val);
+                    }
+
                 }
 
                 context.write(new FloatWritable(r), new Text(id));

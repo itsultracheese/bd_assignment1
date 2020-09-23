@@ -53,10 +53,13 @@ public class Query {
                 Float avg_len = Float.parseFloat(conf.get("avg_len", "-2"));
                 // iterating through all words present in doc
                 for (String t : tfs) {
-                    cur_word = t.substring(0, t.indexOf("=")).replaceAll(" ", "");  // obtaining word
-                    cur_tf = Integer.parseInt(t.substring(t.indexOf("=") + 1).replaceAll("[^0-9]", ""));  // obtaining  word tf in doc
-                    // calculate relevance score
-                    r += get_score(Float.parseFloat(conf.get("!!query_idf!!" + cur_word, "0")), cur_tf, len, avg_len);
+                    if(t.contains("=")) {
+                        cur_word = t.substring(0, t.indexOf("=")).replaceAll(" ", "");  // obtaining word
+                        cur_tf = Integer.parseInt(t.substring(t.indexOf("=") + 1).replaceAll("[^0-9]", ""));  // obtaining  word tf in doc
+                        // calculate relevance score
+                        r += get_score(Float.parseFloat(conf.get("!!query_idf!!" + cur_word, "0")), cur_tf, len, avg_len);
+                    }
+
 
                 }
 
