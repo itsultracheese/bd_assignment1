@@ -87,7 +87,7 @@ public class Query {
         }
     }
 
-    public static HashMap<Integer, String> getTitle(Set<Integer> ids, FileSystem fs) {
+    public static HashMap<Integer, String> getTitle(String folder, Set<Integer> ids, FileSystem fs) {
         HashMap<Integer, String> result = new HashMap<Integer, String>();
         HashSet<Integer> used = new HashSet<Integer>();
         BufferedReader reader;
@@ -95,14 +95,14 @@ public class Query {
         try {
 
             // listing filenames in the dir
-            FileStatus[] fileStatuses = fs.listStatus(new Path("/EnWikiSmall"));
+            FileStatus[] fileStatuses = fs.listStatus(new Path(folder));
 
             // going through each file
             for(FileStatus status: fileStatuses) {
                 String filename = status.getPath().toString();
 
                 // reading files
-                path = new Path("/EnWikiSmall/" + filename.substring(filename.indexOf("/EnWikiSmall/") + "/EnWikiSmall/".length()));
+                path = new Path(folder + "/" + filename.substring(filename.indexOf(folder + "/") + (folder + "/").length()));
 
                 reader = new BufferedReader(new InputStreamReader(fs.open(path)));
 
@@ -132,8 +132,9 @@ public class Query {
         System.out.println("hadoop jar Query.jar Query arg0 arg1 arg2 arg3");
         System.out.println("arg0 - query text in quotes");
         System.out.println("arg1 - number of relevant results to obtain, from 0 to 1000");
-        System.out.println("arg2 - path to indexer step output");
-        System.out.println("arg3 - path to output folder (should not exist before execution");
+        System.out.println("arg2 - path to original wiki documents");
+        System.out.println("arg3 - path to indexer step output");
+        System.out.println("arg4 - path to output folder (should not exist before execution");
         System.out.println("---------------------------------");
         System.out.println("Example: hadoop jar Query.jar Query \"penguin\" 10 IndexerOutput QueryOutput");
     }
@@ -151,15 +152,20 @@ public class Query {
         FileSystem fs = FileSystem.get(conf);
 
         // CHECKING ARGUMENTS CORRECTNESS
-        if (args.length != 4) {
+        if (args.length != 5) {
             System.out.println("The number of arguments provided is incorrect");
             System.out.println("---------------------------------");
             args_usage();
             System.exit(1);
         }
 
-        Path p1 = new Path(args[2]);
-        Path p2 = new Path(args[3]);
+        Path p1 = new Path(args[3]);
+        Path p2 = new Path(args[4]);
+        String wiki = args[2];
+
+        if (wiki.charAt(wiki.length() - 1) == '/') {
+            wiki = wiki.substring(0, wiki.length()-1);
+        }
 
         if (!fs.exists(p1)) {
             System.out.println("The input directory doesn't exist");
@@ -276,8 +282,8 @@ public class Query {
         job.setOutputKeyClass(FloatWritable.class);
         job.setOutputValueClass(Text.class);
         FileInputFormat.setInputDirRecursive(job, true);
-        FileInputFormat.addInputPath(job, new Path(args[2]));
-        FileOutputFormat.setOutputPath(job, new Path(args[3]));
+        FileInputFormat.addInputPath(job, new Path(args[3]));
+        FileOutputFormat.setOutputPath(job, new Path(args[4]));
         job.waitForCompletion(true);
 
 
@@ -293,7 +299,7 @@ public class Query {
         try {
 
             // listing filenames in the dir
-            FileStatus[] fileStatuses = fs.listStatus(new Path(args[3]));
+            FileStatus[] fileStatuses = fs.listStatus(new Path(args[4]));
 
             // going through each file
             for(FileStatus status: fileStatuses) {
@@ -304,7 +310,7 @@ public class Query {
                 String filename = status.getPath().toString();
                 if (!filename.contains("SUCCESS")) {
                     // reading files
-                    path = new Path(args[3] + "/" + filename.substring(filename.indexOf(args[3]) + args[3].length() + 1));
+                    path = new Path(args[4] + "/" + filename.substring(filename.indexOf(args[4]) + args[4].length() + 1));
 
                     reader = new BufferedReader(new InputStreamReader(fs.open(path)));
 
@@ -334,7 +340,7 @@ public class Query {
         }
 
         // obtaining titles and urls
-        HashMap<Integer, String> title = getTitle(top.keySet(), fs);
+        HashMap<Integer, String> title = getTitle(wiki, top.keySet(), fs);
 
         // output info about top N relevant results
         for(Integer i: arr){

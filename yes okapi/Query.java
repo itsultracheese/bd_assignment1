@@ -99,7 +99,7 @@ public class Query {
         }
     }
 
-    public static HashMap<Integer, String> getTitle(Set<Integer> ids, FileSystem fs) {
+    public static HashMap<Integer, String> getTitle(String wiki, Set<Integer> ids, FileSystem fs) {
         HashMap<Integer, String> result = new HashMap<Integer, String>();
         HashSet<Integer> used = new HashSet<Integer>();
         BufferedReader reader;
@@ -107,14 +107,14 @@ public class Query {
         try {
 
             // listing filenames in the dir
-            FileStatus[] fileStatuses = fs.listStatus(new Path("/EnWikiSmall"));
+            FileStatus[] fileStatuses = fs.listStatus(new Path(wiki));
 
             // going through each file
             for(FileStatus status: fileStatuses) {
                 String filename = status.getPath().toString();
 
                 // reading files
-                path = new Path("/EnWikiSmall/" + filename.substring(filename.indexOf("/EnWikiSmall/") + "/EnWikiSmall/".length()));
+                path = new Path(wiki + "/" + filename.substring(filename.indexOf(wiki + "/") + (wiki + "/").length()));
 
                 reader = new BufferedReader(new InputStreamReader(fs.open(path)));
 
@@ -167,15 +167,20 @@ public class Query {
         FileSystem fs = FileSystem.get(conf);
 
         // CHECKING ARGUMENTS CORRECTNESS
-        if (args.length != 4) {
+        if (args.length != 5) {
             System.out.println("The number of arguments provided is incorrect");
             System.out.println("---------------------------------");
             args_usage();
             System.exit(1);
         }
 
-        Path p1 = new Path(args[2]);
-        Path p2 = new Path(args[3]);
+        Path p1 = new Path(args[3]);
+        Path p2 = new Path(args[4]);
+        String wiki = args[2];
+
+        if (wiki.charAt(wiki.length() - 1) == '/') {
+            wiki = wiki.substring(0, wiki.length()-1);
+        }
 
         if (!fs.exists(p1)) {
             System.out.println("The input directory doesn't exist");
@@ -247,7 +252,7 @@ public class Query {
         try {
 
             // listing filenames in the dir
-            reader = new BufferedReader(new InputStreamReader(fs.open(new Path(args[2] + "/avg_len"))));
+            reader = new BufferedReader(new InputStreamReader(fs.open(new Path(args[3] + "/avg_len"))));
             String line = reader.readLine();
             avg_len = Float.parseFloat(line.split(" ", 2)[0].replaceAll("[^0-9.]", ""));
             n_docs = Integer.parseInt(line.split(" ", 2)[1].replaceAll("[^0-9]", ""));
@@ -311,8 +316,8 @@ public class Query {
         job.setOutputKeyClass(FloatWritable.class);
         job.setOutputValueClass(Text.class);
         FileInputFormat.setInputDirRecursive(job, true);
-        FileInputFormat.addInputPath(job, new Path(args[2]));
-        FileOutputFormat.setOutputPath(job, new Path(args[3]));
+        FileInputFormat.addInputPath(job, new Path(args[3]));
+        FileOutputFormat.setOutputPath(job, new Path(args[4]));
         job.waitForCompletion(true);
 
 
@@ -328,7 +333,7 @@ public class Query {
         try {
 
             // listing filenames in the dir
-            FileStatus[] fileStatuses = fs.listStatus(new Path(args[3]));
+            FileStatus[] fileStatuses = fs.listStatus(new Path(args[4]));
 
             // going through each file
             for(FileStatus status: fileStatuses) {
@@ -339,7 +344,7 @@ public class Query {
                 String filename = status.getPath().toString();
                 if (!filename.contains("SUCCESS")) {
                     // reading files
-                    path = new Path(args[3] + "/" + filename.substring(filename.indexOf(args[3]) + args[3].length() + 1));
+                    path = new Path(args[4] + "/" + filename.substring(filename.indexOf(args[4]) + args[4].length() + 1));
 
                     reader = new BufferedReader(new InputStreamReader(fs.open(path)));
 
@@ -369,7 +374,7 @@ public class Query {
         }
 
         // obtaining titles and urls
-        HashMap<Integer, String> title = getTitle(top.keySet(), fs);
+        HashMap<Integer, String> title = getTitle(wiki, top.keySet(), fs);
 
         // output info about top N relevant results
         for(Integer i: arr){
