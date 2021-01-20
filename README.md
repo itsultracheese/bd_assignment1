@@ -1,5 +1,9 @@
 # bd_assignment1
 
+## Article
+
+https://hackmd.io/f0WiR6SnRQGQuP8-pimiLQ
+
 ## Commands
 
 ```
@@ -26,3 +30,4 @@ Implementation of the search engine with simple formulas
 ## Testing
 
 Both implementation were tested on `/EnWikiSmall` and `/EnWikiMedium`
+
